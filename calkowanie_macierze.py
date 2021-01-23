@@ -2,6 +2,7 @@ import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 import networkx as nx
+import ast
 
 # parsuje przesłany ciąg znaków
 def parse(a):
@@ -362,7 +363,7 @@ def definitiveIntegrationFile(input="input.txt", output="output.txt", r=False):
 
 def integrate_to_graph(function, variables):
     '''Całkuje podany wielomian przez podane zmienne.
-    Zwraca zcałkowane równanie w postaci grafu.
+    Zwraca scałkowane równanie w postaci tabeli grafu.
 
     equation-wielomian,
     variables-lista zmiennych'''
@@ -376,7 +377,7 @@ def integrate_to_graph(function, variables):
 
 def integrate_from_File(input="input.txt"):
     '''Odczytuje podane równanie w postaci wielomianu
-    a następnie przetważa je i zwraca graf w formie tablicy.
+    a następnie przetwarza je i zwraca graf w formie tablicy.
 
     input-plik wejściowy(domyślnie input.txt),
     '''
@@ -398,6 +399,10 @@ def integrate_from_File(input="input.txt"):
 
 #zliczanie wierzchołków grafu
 def count_vertices(graph):
+    '''Zwraca liczbę wierzchołków grafu.
+
+        graph - graf, którego wierzchołki zliczamy.
+    '''
     i = 0
     for vertice in graph:
         if isinstance(vertice, list):
@@ -408,6 +413,13 @@ def count_vertices(graph):
 
 #wypełnia macierz sąsiedztwa nad przekątną
 def map_graph(matrix, graph, row, col):
+    '''Rekurencyjne uzupełnianie macierzy sąsiedztwa grafu nad przekątną
+
+        matrix - macierz do uzupełnienia
+        graph - graf w postaci tablicy tablic
+        row - wiersz
+        col - kolumna
+    '''
     if isinstance(graph[1], list):
         col += 1
         matrix[row][col] = 1
@@ -432,6 +444,14 @@ def map_graph(matrix, graph, row, col):
     return 0
 
 def map_graph_labels(labels, graph, row, col):
+    '''Rekurencyjne przypisywanie oznaczeń do wierzchołków grafu na rysunku.
+
+            labels - słownik etykiet
+            graph - graf w postaci tablicy tablic
+            row - wiersz
+            col - kolumna
+        '''
+
     if not (row in labels.keys()):
         labels[row] = graph[0]
 
@@ -458,34 +478,12 @@ def map_graph_labels(labels, graph, row, col):
 
     return 0
 
-def map_graph_positions(positions, graph, row, col):
-    if not (row in positions.keys()):
-        positions[row] = (row - 2*(col%2), col)
-
-    if isinstance(graph[1], list):
-        col += 1
-        tmp_row = col
-        tmp = map_graph_positions(positions, graph[1], tmp_row, col)
-        col += count_vertices(graph[1])-1
-    else:
-        col += 1
-        if not (col in positions.keys()):
-            positions[col] = (row - col, col+1)
-
-    if len(graph) >= 3:
-       if isinstance(graph[2], list):
-           col += 1
-           tmp_row = col
-           tmp = map_graph_positions(positions, graph[2], tmp_row, col)
-           col += count_vertices(graph[1])-1
-       else:
-           col += 1
-           if not (col in positions.keys()):
-               positions[col] = (row, col-2)
-
-    return 0
 
 def map_full(graph):
+    '''Funkcja tworząca macierz sąsiedztwa podanego grafu. Zwraca macierz sąsiedztwa.
+
+        graph - graf w postaci tablicy tablic
+    '''
     graph_count = count_vertices(graph)
 
     graph_matrix = np.zeros([graph_count, graph_count], dtype=int)
@@ -498,31 +496,85 @@ def map_full(graph):
 
     return graph_matrix
 
-if __name__ == '__main__':
-    import copy
 
-# kilka etapów parsowania dla zapewnienia poprawności wykonywania dziłań
-    graph = integrate_from_File()
+def print_graph(graph, output='test.pdf'):
+    '''Funkcja rysująca graf i zapisująca go w pliku.
 
-    graph_matrix = map_full(graph)
+    graph - rysowany graf
+    output - string z nazwą pliku zapisu
 
-    print(graph)
-
-    print(graph_matrix)
+    '''
 
     labels = {}
 
+    graph_matrix = map_full(graph)
+
     map_graph_labels(labels, graph, 0, 0)
-
-    positions = {}
-
-    map_graph_positions(positions, graph, 0, 0)
-
-    pp = PdfPages('test1.pdf')
+    pp = PdfPages(output)
     G = nx.from_numpy_matrix(np.array(graph_matrix))
-    g = nx.draw(G, with_labels=True, labels=labels ,pos=positions)
+    pos = nx.spring_layout(G)
+
+    node_colors = ['r']
+    for i in range(count_vertices(graph)-1):
+        node_colors.append('#1f77b4')
+
+    g = nx.draw(G, with_labels=True, labels=labels, pos=pos, node_color=node_colors)
     # zapisuję graf do pliku
     pp.savefig(g)
     # czyszcze rysowaną figurę przed następnym rysunkiem.
     plt.clf()
     pp.close()
+
+def save_matrix(matrix, labels, output='matrix.txt'):
+    '''Zapisuje macierz sąsiedztwa w pliku tekstowym.
+
+        matrix - macierz do zapisu
+        labels - etykiety wierzchołków
+        output - nazwa pliku zapisu
+    '''
+    with open(output, "w") as o:
+        o.write(str(labels)+'\n')
+        o.write(np.array2string(matrix)[1:-1])
+
+def load_matrix(input='matrix.txt'):
+    '''Wczytuje macierz sąsiedztwa z pliku i zwraca ją oraz jej etykiety.
+
+        input - plik zapisu
+    '''
+    adj_matrix = []
+    label = ''
+
+    with open(input, 'r') as myfile:
+        label = myfile.readline()
+        for line in myfile:
+            l = line.replace(' ', '').replace('[', '').replace(']', '').replace('\n', '')
+
+            matrix = list(l)
+
+            mat = [int(x) for x in matrix]
+
+            adj_matrix.append(mat)
+    return (np.array(adj_matrix), ast.literal_eval(label))
+
+
+
+if __name__ == '__main__':
+
+    graph = integrate_from_File()
+
+    graph_matrix = map_full(graph)
+
+    labels = {}
+    map_graph_labels(labels, graph, 0, 0)
+
+    #print(graph)
+
+    print(graph_matrix)
+    save_matrix(graph_matrix, labels)
+
+    matrix_test = load_matrix()
+
+    print(matrix_test[0])
+    print(matrix_test[1])
+
+    print_graph(graph)
